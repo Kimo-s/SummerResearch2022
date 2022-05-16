@@ -1,0 +1,25 @@
+ 3		Npair
+ 5.		rk, A
+ 1      rk_dist (0-linear,equal; 1-linear,exponential; 5-random,equal; 6_and_other-random,exponential)
+ 1.52e-3	cat_mob, cm2/Vs
+ 2.		cat_mass (multiple of argon atom mass)
+ 200.   F, V/cm (external electric field)
+ 1.		Fd_x	(direction of F - x component; the track is formed along z axis)
+ 0.		Fd_y	(direction of F - y component)
+ 0.		Fd_z	(direction of F - z component)
+ 6.		B, T	(magnetic field)
+ 0.		Bd_x	(direction of B - x component)
+ 1.		Bd_y	(direction of B - y component)
+ 0.		Bd_z	(direction of B - z component)
+ 1      Ek0_dist (Ek0 distributed? 0-No, 1-Yes) 
+ 2.     r0, A
+ 5.     Ek0, eV (not used if Ek0_dist=1)
+ 12.9   Rcrit, A
+ 1.0    Ekcrit, eV
+ 25000  Rmax, A
+ 100   Nrun
+ 10    Nav
+ 1.e-6  g_E (energy drift - dt change)
+ 1.e-7  h_E
+ 0.2    g_tau (dt/tau - dt change)
+ 0.1    h_tau
