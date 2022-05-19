@@ -13,6 +13,9 @@
 #include <stdio.h>
 #include <math.h>
 #include <stdlib.h>
+#include <time.h>
+#include <stdint.h>
+#include <omp.h>
 #include <string.h>
 #include "ran_gen.h"
 #include "LAr_crsec.h"
@@ -171,14 +174,20 @@ void main(int argc, char *argv[])
 	if (Ek0_dist)
 		fEk_sec_el_init();	//initialize the energy distribution data
 
+	struct timeval  start, end;
+	//uint64_t delta_us;
+
 	for (irun=1;irun<=Nrun;irun++) {			//main loop
-		printf("run no. %d\t",irun);
-		fprintf(fp_out,"run no. %d\t",irun);
+		printf("run no. %ld\t",irun);
+		fprintf(fp_out,"run no. %ld\t",irun);
 
+		gettimeofday(&start, NULL);
 		traj();		//calculate a complete trajectory for a cluster of electron-ion pairs
+		gettimeofday(&end, NULL);
+		//delta_us = (end.tv_sec - start.tv_sec) * 1000000 + (end.tv_nsec - start.tv_nsec) / 1000;
 
-		printf("\n");
-		fprintf(fp_out,"\n");
+		printf("time spent %f\n", (double)(end.tv_usec - start.tv_usec) / 1000000 + (double)(end.tv_sec - start.tv_sec));
+		fprintf(fp_out,"time spent %f\n", (double)(end.tv_usec - start.tv_usec) / 1000000 + (double)(end.tv_sec - start.tv_sec));
 		if (irun%Nav == 0)		//periodic sub-averaging and output
 			output(2);
 	}
@@ -383,12 +392,52 @@ void traj()
 	t=0.;
 
 // Calculate the accelerations and energies at t
+	// Ep=0.;
+	// double axP[NP],ayP[NP],azP[NP],acatxP[NP],acatyP[NP],acatzP[NP];
+	// for (i=0;i<Nel;i++) axP[i]=ayP[i]=azP[i]=0.;
+	// for (j=0;j<Ncat;j++) acatxP[j]=acatyP[j]=acatzP[j]=0.;
+
+
+	// kk=0;
+	// for (i=0;i<Nel;i++) {			//electron-cation contributions (parallelized)
+	// 	for (j=0;j<Ncat;j++) {
+	// 		xij=x[i]-xcat[j];
+	// 		yij=y[i]-ycat[j];
+	// 		zij=z[i]-zcat[j];
+	// 		rij_sq=xij*xij+yij*yij+zij*zij;
+	// 		r_el_cat[kk++]=rij=sqrt(rij_sq);
+	// 		if (rij > Rcat1) {
+	// 			kmr3=-km/(rij*rij_sq);
+	// 			axP[i]+=kmr3*xij;
+	// 			ayP[i]+=kmr3*yij;
+	// 			azP[i]+=kmr3*zij;
+	// 			kMcatr3=-kmr3*mMcat;
+	// 			acatxP[j]+=kMcatr3*xij;
+	// 			acatyP[j]+=kMcatr3*yij;
+	// 			acatzP[j]+=kMcatr3*zij;
+	// 			Ep-=k/rij;
+	// 		} else if (rij > Rcat0) {
+	// 			Amcatr=Amcat*(Rcat0/rij-1.0);
+	// 			axP[i]+=Amcatr*xij;
+	// 			ayP[i]+=Amcatr*yij;
+	// 			azP[i]+=Amcatr*zij;
+	// 			AMccatr=-Amcatr*mMcat;
+	// 			acatxP[j]+=AMccatr*xij;
+	// 			acatyP[j]+=AMccatr*yij;
+	// 			acatzP[j]+=AMccatr*zij;
+	// 			Ep+=Acat*rij_sq+Bcat*rij+Ccat;
+	// 		} else
+	// 			Ep+=EpRcat;
+	// 	}
+	// }
+
+	
 	Ep=0.;
 	for (i=0;i<Nel;i++) ax[i]=ay[i]=az[i]=0.;
 	for (j=0;j<Ncat;j++) acatx[j]=acaty[j]=acatz[j]=0.;
 
 	kk=0;
-	for (i=0;i<Nel;i++) {			//electron-cation contributions
+	for (i=0;i<Nel;i++) {			//electron-cation contributions (not parallelized)
 		for (j=0;j<Ncat;j++) {
 			xij=x[i]-xcat[j];
 			yij=y[i]-ycat[j];
@@ -420,6 +469,12 @@ void traj()
 		}
 	}
 	kkmax=kk;
+
+	// for (i=0;i<Nel;i++){
+	// 	if(ax[i] != 1.0 || ay[i] != ayP[i] || az[i] != azP[i]){
+	// 		printf("Mistmatch found! iterations (%d, %d)\n", Nelm1, Ncat);
+	// 	}
+	// }
 
 	for (i=0;i<Nelm1;i++) {			//electron-electron contributions
 		for (j=i+1;j<Nel;j++) {
@@ -495,18 +550,23 @@ void traj()
 	Et=Ep+Ekelt+Ekcatt;
 	Ekel_av=Ekelt/Nel;
 
+	struct timeval start, end;
+	// gettimeofday(&start, NULL);
+
 	while ((fate=check_traj())==GO_ON) {	//check for reaction or escape
 
+		#pragma omp for
 		for (i=0;i<Nel;i++) {
 			vMx[i]=kBTM*ran_gauss();		//generate the velocities of atoms
 			vMy[i]=kBTM*ran_gauss();
 			vMz[i]=kBTM*ran_gauss();
 		}
 
+
 		do {
 			dt_high=0;
 			dt_increase=1;
-
+			
 			for (i=0;i<Nel;i++) {
 				x_n[i]=x[i]+vx[i]*dt+ax[i]*dt_sq_half;	//electron positions at t+dt
 				y_n[i]=y[i]+vy[i]*dt+ay[i]*dt_sq_half;
@@ -566,6 +626,55 @@ void traj()
 				}
 			}
 			kkmax=kk;
+
+			double ax_nP[i], ay_nP[i], az_nP[i], acatx_nP[j], acaty_nP[j], acatz_nP[j];
+
+			Ep_n=0.;		//accelerations and potential energy at t+dt
+			#pragma omp for
+			for (i=0;i<Nel;i++) ax_nP[i]=ay_nP[i]=az_nP[i]=0.;
+			#pragma omp for
+			for (j=0;j<Ncat;j++) acatx_nP[j]=acaty_nP[j]=acatz_nP[j]=0.;
+
+			kk=0;
+			#pragma omp for private(rij_sq, xij, yij, zij)
+			for (i=0;i<Nel;i++) {			//electron-cation contributions
+				for (j=0;j<Ncat;j++) {
+					xij=x_n[i]-xcat_n[j];
+					yij=y_n[i]-ycat_n[j];
+					zij=z_n[i]-zcat_n[j];
+					rij_sq=xij*xij+yij*yij+zij*zij;
+					r_el_cat_n[kk++]=rij=sqrt(rij_sq);
+					if (rij > Rcat1) {
+						kmr3=-km/(rij*rij_sq);
+						ax_nP[i]+=kmr3*xij;
+						ay_nP[i]+=kmr3*yij;
+						az_nP[i]+=kmr3*zij;
+						kMcatr3=-kmr3*mMcat;
+						acatx_nP[j]+=kMcatr3*xij;
+						acaty_nP[j]+=kMcatr3*yij;
+						acatz_nP[j]+=kMcatr3*zij;
+						Ep_n-=k/rij;
+					} else if (rij > Rcat0) {
+						Amcatr=Amcat*(Rcat0/rij-1.0);
+						ax_nP[i]+=Amcatr*xij;
+						ay_nP[i]+=Amcatr*yij;
+						az_nP[i]+=Amcatr*zij;
+						AMccatr=-Amcatr*mMcat;
+						acatx_nP[j]+=AMccatr*xij;
+						acaty_nP[j]+=AMccatr*yij;
+						acatz_nP[j]+=AMccatr*zij;
+						Ep_n+=Acat*rij_sq+Bcat*rij+Ccat;
+					} else
+						Ep_n+=EpRcat;
+				}
+			}
+			kkmax=kk;
+
+			for(i=0;i<Nel;i++){     // testing the parellel results
+				if(ax_nP[i] != ax_n[i] || ay_nP[i] != ay_n[i] || az_nP[i] != az_n[i]){
+					printf("mistmatch found\n");
+				}
+			}
 
 			for (i=0;i<Nelm1;i++) {			//electron-electron contributions
 				for (j=i+1;j<Nel;j++) {
@@ -690,6 +799,7 @@ void traj()
 			}
 
 		} while (dt_high);
+		
 
 		colls=0;
 		for (i=0;i<Nel;i++) {
@@ -810,9 +920,12 @@ void traj()
 		Ep=Ep_n;
 		Et=Ep+Ekelt+Ekcatt;
 		Ekel_av=Ekelt/Nel;
+		
 
 		if (dt_increase) dt_inc();  //increase dt, if allowed
 	}
+	// gettimeofday(&end, NULL);
+	// printf("Time inside traj() %f \n", (double)(end.tv_usec - start.tv_usec) / 1000000 + (double)(end.tv_sec - start.tv_sec));
 	count_up();			//update the counters
 	return;
 }
@@ -1320,7 +1433,7 @@ void output(int mode)
 	case 1:
 		printf("--------------------------------------------------------------------------------\n");
 		printf("   Simulation of electron-ion recombination in liquid argon at 87 K\n");
-		printf("   Npair=%2d  rk,A=%6.1f  rk_dist=%1d  Rmax,A=%8.1f  Nrun=%7d  Nav=%6d\n",Npair,rk_A,rk_dist,Rmax_A,Nrun,Nav);
+		printf("   Npair=%2d  rk,A=%6.1f  rk_dist=%1d  Rmax,A=%8.1f  Nrun=%7ld  Nav=%6d\n",Npair,rk_A,rk_dist,Rmax_A,Nrun,Nav);
 		printf("   cat_mob,cm2/Vs=%10.4e  cat_mass/MAr=%6.2f\n",cat_mob_cm2Vs,cat_mass_MAr);
 		printf("   External electric field: F,V/cm=%6.1f  Fd_x=%7.4f  Fd_y=%7.4f  Fd_z=%7.4f\n",F_Vcm,Fd_x,Fd_y,Fd_z);
 		printf("   Magnetic field: B,T=%8.4f  Bd_x=%7.4f  Bd_y=%7.4f  Bd_z=%7.4f\n",B_T,Bd_x,Bd_y,Bd_z);

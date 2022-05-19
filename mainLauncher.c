@@ -22,7 +22,8 @@ int main(int argc, char *argv[]){
 
     srand(time(0));
     int seed;
-    for(int i = 0; i < numOfInsteances; i++){
+    int i;
+    for(i = 0; i < numOfInsteances; i++){
         seed = rand();
         pids[i] = fork();
 
@@ -36,7 +37,7 @@ int main(int argc, char *argv[]){
         }
     }
 
-    for(int i = 0; i < numOfInsteances; i++){
+    for(i = 0; i < numOfInsteances; i++){
         waitpid(pids[i],0,0);
     }
 
